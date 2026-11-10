@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>卓球部 出席管理システム</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Noto Sans JP -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans JP"', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+        <div id="toast-content" class="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-xl flex items-center space-x-3 text-sm font-medium">
+            <i id="toast-icon" class="fas fa-check-circle text-emerald-400 text-lg"></i>
+            <span id="toast-message">保存しました</span>
+        </div>
+    </div>
+
+    <!-- Sticky Header & Summary Counter -->
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md shadow-md border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
+            
+            <!-- App Title & Date Selector -->
+            <div class="flex items-center justify-between w-full md:w-auto">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-emerald-600 text-white p-2.5 rounded-xl shadow-md flex items-center justify-center">
+                        <i class="fas fa-table-tennis-paddle-ball text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-slate-900 tracking-tight">卓球部 出席管理</h1>
+                        <div class="flex items-center space-x-2 text-xs text-slate-500 font-medium">
+                            <span id="current-date-display" class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200"></span>
+                            <input type="date" id="attendance-date" class="bg-transparent text-xs font-semibold text-emerald-600 focus:outline-none cursor-pointer">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile Action Buttons -->
+                <div class="flex items-center space-x-2 md:hidden">
+                    <button onclick="openManageModal()" class="bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 p-2.5 rounded-xl flex items-center justify-center shadow-sm" title="部員管理">
+                        <i class="fas fa-gear text-base"></i>
+                    </button>
+                    <button onclick="openHistoryModal()" class="bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 p-2.5 rounded-xl flex items-center justify-center shadow-sm" title="履歴">
+                        <i class="fas fa-bars text-base"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Real-time Counters Area -->
+            <div class="flex items-center overflow-x-auto w-full md:w-auto pb-1 md:pb-0 gap-2 no-scrollbar">
+                <!-- Total Counter Pill -->
+                <div class="bg-slate-900 text-white px-4 py-2 rounded-xl flex items-center space-x-2 shrink-0 shadow-inner">
+                    <div class="text-left">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">全体出席</div>
+                        <div class="text-base font-black"><span id="total-present" class="text-emerald-400">0</span> / <span id="total-members">79</span>名</div>
+                    </div>
+                </div>
+
+                <!-- Rank Counters Container -->
+                <div id="rank-counters" class="flex items-center space-x-2">
+                    <!-- Dynamically populated via JS -->
+                </div>
+            </div>
+
+            <!-- Desktop Action Buttons -->
+            <div class="hidden md:flex items-center space-x-2">
+                <button onclick="openManageModal()" class="bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 px-3.5 py-2.5 rounded-xl text-sm font-semibold flex items-center space-x-2 shadow-sm">
+                    <i class="fas fa-gear text-slate-500"></i>
+                    <span>部員・ランク管理</span>
+                </button>
+                <button onclick="openHistoryModal()" class="bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 px-3.5 py-2.5 rounded-xl text-sm font-semibold flex items-center space-x-2 shadow-sm">
+                    <i class="fas fa-history text-slate-500"></i>
+                    <span>過去の履歴</span>
+                </button>
+                <button onclick="saveTodayAttendance()" class="bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center space-x-2 shadow-md shadow-emerald-600/20">
+                    <i class="fas fa-cloud-arrow-up"></i>
+                    <span>保存</span>
+                </button>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Main Content Area: Groups & Member Cards -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6 pb-28">
+        <div id="groups-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Dynamically populated via JS -->
+        </div>
+    </main>
+
+    <!-- Mobile Sticky Bottom Action Bar -->
+    <div class="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 md:hidden flex items-center justify-between gap-3 shadow-lg">
+        <button onclick="openManageModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 py-3 rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 shadow-sm">
+            <i class="fas fa-gear text-slate-500"></i>
+            <span>部員管理</span>
+        </button>
+        <button onclick="openHistoryModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 active:scale-95 transition text-slate-700 py-3 rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 shadow-sm">
+            <i class="fas fa-history text-slate-500"></i>
+            <span>履歴</span>
+        </button>
+        <button onclick="saveTodayAttendance()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition text-white py-3 px-4 rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-600/20">
+            <i class="fas fa-cloud-arrow-up"></i>
+            <span>保存</span>
+        </button>
+    </div>
+
+    <!-- 1. Member & Rank Management Modal -->
+    <div id="manage-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-3 md:p-6 transition-opacity duration-300">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300" id="manage-modal-box">
+            
+            <!-- Header -->
+            <div class="p-4 md:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-slate-900 text-white p-2.5 rounded-xl">
+                        <i class="fas fa-users-gear text-lg"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">部員・ランク管理</h2>
+                        <p class="text-xs text-slate-500">ランクの追加・削除、部員の所属変更、新規追加が行えます</p>
+                    </div>
+                </div>
+                <button onclick="closeManageModal()" class="bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 p-2 rounded-xl w-9 h-9 flex items-center justify-center transition">
+                    <i class="fas fa-times text-base"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="flex-1 overflow-auto p-4 md:p-6 space-y-6 bg-white">
+                
+                <!-- NEW: Rank Management Section -->
+                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 space-y-3">
+                    <h3 class="text-sm font-bold text-slate-800 flex items-center space-x-2">
+                        <i class="fas fa-layer-group text-indigo-600"></i>
+                        <span>ランクの追加・削除</span>
+                    </h3>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <input type="text" id="new-rank-name" placeholder="新しいランク名（例: F, 初心者）" class="flex-1 bg-white border border-slate-300 text-slate-800 text-sm rounded-xl px-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <button onclick="addNewRank()" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold py-2 px-4 rounded-xl text-sm transition shadow-sm flex items-center justify-center space-x-2">
+                            <i class="fas fa-plus"></i>
+                            <span>ランクを追加</span>
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 pt-2" id="rank-pills-container">
+                        <!-- 既存のランクタグと削除ボタンがここに並ぶ -->
+                    </div>
+                </div>
+
+                <!-- Add New Member Form -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                    <h3 class="text-sm font-bold text-slate-800 flex items-center space-x-2">
+                        <i class="fas fa-user-plus text-emerald-600"></i>
+                        <span>新規部員の追加</span>
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <input type="text" id="new-member-name" placeholder="氏名（例: 山田 太郎）" class="bg-white border border-slate-300 text-slate-800 text-sm rounded-xl px-3.5 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        <select id="new-member-rank" class="bg-white border border-slate-300 text-slate-800 text-sm rounded-xl px-3.5 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            <!-- JSで動的生成 -->
+                        </select>
+                        <button onclick="addNewMember()" class="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2 px-4 rounded-xl text-sm transition shadow-sm flex items-center justify-center space-x-2">
+                            <i class="fas fa-plus"></i>
+                            <span>部員を追加</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Member Table for Rank Selection and Deletion -->
+                <div class="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div class="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-600">登録済み部員一覧 (<span id="manage-total-count">0</span>名)</span>
+                        <button onclick="resetMembersToDefault()" class="text-xs text-rose-600 hover:underline font-medium">初期データへリセット</button>
+                    </div>
+                    <div class="max-h-80 overflow-y-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead class="bg-slate-50 text-slate-500 text-xs font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="py-2.5 px-4">部員氏名</th>
+                                    <th class="py-2.5 px-4">所属ランク（変更可能）</th>
+                                    <th class="py-2.5 px-4 text-center w-20">削除</th>
+                                </tr>
+                            </thead>
+                            <tbody id="manage-members-tbody" class="divide-y divide-slate-100">
+                                <!-- JSで展開 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                <button onclick="closeManageModal()" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-xl text-sm font-bold transition">
+                    完了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. History / Matrix Modal -->
+    <div id="history-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-3 md:p-6 transition-opacity duration-300">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden transform scale-95 transition-transform duration-300" id="history-modal-box">
+            
+            <!-- Modal Header -->
+            <div class="p-4 md:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-slate-900 text-white p-2.5 rounded-xl">
+                        <i class="fas fa-table text-lg"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">出席記録マトリックス</h2>
+                        <p class="text-xs text-slate-500">縦軸：生徒名 ／ 横軸：日付のスプレッドシート風履歴一覧</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="exportCSV()" class="bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+                        <i class="fas fa-file-csv"></i>
+                        <span class="hidden sm:inline">CSV出力</span>
+                    </button>
+                    <button onclick="clearAllHistoryConfirm()" class="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+                        <i class="fas fa-trash-alt"></i>
+                        <span class="hidden sm:inline">初期化</span>
+                    </button>
+                    <button onclick="closeHistoryModal()" class="bg-slate-200 hover:bg-slate-300 active:scale-95 text-slate-700 p-2 rounded-xl w-9 h-9 flex items-center justify-center transition">
+                        <i class="fas fa-times text-base"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body: Matrix Table -->
+            <div class="flex-1 overflow-auto p-4 md:p-6 bg-white">
+                <div id="matrix-container" class="min-w-full inline-block align-middle">
+                    <!-- JSで動的生成 -->
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+                <span>※ セルを直接タップして過去の出欠を変更可能（自動保存）。</span>
+                <button onclick="closeHistoryModal()" class="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2 rounded-xl font-bold transition">
+                    閉じる
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Core JavaScript Application -->
+    <script>
+        // 初期部員データ
+        const DEFAULT_CLUB_DATA = {
+            "A": ["陳 威宇", "佐治 直一郎", "森 優太", "楊 チェン哲", "吉田 旭希", "松溪 遼人", "並木 理人"],
+            "B": ["御手洗 克哉", "福山 智志", "秋生 晴矢", "清水 謙伍", "山田 健人", "四方田 凛太郎", "土屋 開", "分銅 友輝", "鈴木 智大"],
+            "C": ["渡辺 将史", "三上 優人", "竹内 陽心郎", "佐々木 郁人", "吉田 聡一郎", "川上 湊二郎", "武地 耕平", "渡邉 永都", "永山 暖馬", "竹中 敦紀", "綿貫 龍", "魏 銘白"],
+            "D": ["江山 広泰", "古澤 琳之介", "高田 凱洋", "高橋 翔", "内川 悠", "水上 琉成", "向笠 傑", "李 成蹊"],
+            "E": ["木村 暉", "柏木 佑斗", "高田 龍", "篠田 慶一", "伊波 慶", "陳 麒翔", "工藤 圭恭"],
+            "中一": ["荒井 佑真", "猪熊 相太", "小川 賢人", "胡 浩辰", "荒巻 慧斗", "有本 治之輔", "王 佑彦", "加藤 伊織", "苅谷 朔太朗", "石田 博規", "上阪 茅大", "大久保 智哉", "尾崎 陸", "星 凛太郎", "柳林 玄信", "小椋 舜夫", "楠原 悠斗", "小林 慶", "佐竹 遼斗", "佐藤 榮政", "珠久 翼", "邵 冠哲", "丁子 博", "野村 直矢", "橋本 絢仁", "穂積 遙希", "張 悦揚", "戸清 羽琉", "三神 遼生", "江田 梁平", "榊原 碧真", "高橋 庵", "高山 隼", "齋藤 匠", "西平 巧", "白 亦軒"]
+        };
+
+        const DEFAULT_RANKS = ["A", "B", "C", "D", "E", "中一"];
+        let RANKS = [];
+        let clubData = {};
+        let attendanceState = {}; 
+        let currentSelectedDate = '';
+
+        const rankColorPool = [
+            { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-800" },
+            { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-800" },
+            { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-800" },
+            { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", badge: "bg-amber-100 text-amber-800" },
+            { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", badge: "bg-orange-100 text-orange-800" },
+            { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700", badge: "bg-rose-100 text-rose-800" },
+            { bg: "bg-cyan-50", border: "border-cyan-200", text: "text-cyan-700", badge: "bg-cyan-100 text-cyan-800" },
+            { bg: "bg-indigo-50", border: "border-indigo-200", text: "text-indigo-700", badge: "bg-indigo-100 text-indigo-800" }
+        ];
+
+        function getRankTheme(index) {
+            return rankColorPool[index % rankColorPool.length];
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            currentSelectedDate = `${year}-${month}-${day}`;
+
+            const dateInput = document.getElementById('attendance-date');
+            dateInput.value = currentSelectedDate;
+            updateDateDisplayLabel(currentSelectedDate);
+
+            dateInput.addEventListener('change', (e) => {
+                currentSelectedDate = e.target.value;
+                updateDateDisplayLabel(currentSelectedDate);
+                loadAttendanceForDate(currentSelectedDate);
+                renderMainUI();
+            });
+
+            loadDataFromStorage();
+            renderMainUI();
+        });
+
+        function updateDateDisplayLabel(dateStr) {
+            const parts = dateStr.split('-');
+            document.getElementById('current-date-display').textContent = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+        }
+
+        function loadDataFromStorage() {
+            try {
+                const storedRanks = localStorage.getItem('tt_ranks_v3');
+                if (storedRanks) {
+                    RANKS = JSON.parse(storedRanks);
+                } else {
+                    RANKS = [...DEFAULT_RANKS];
+                }
+            } catch (e) {
+                RANKS = [...DEFAULT_RANKS];
+            }
+
+            try {
+                const storedMembers = localStorage.getItem('tt_members_v3');
+                if (storedMembers) {
+                    clubData = JSON.parse(storedMembers);
+                } else {
+                    clubData = JSON.parse(JSON.stringify(DEFAULT_CLUB_DATA));
+                }
+            } catch (e) {
+                clubData = JSON.parse(JSON.stringify(DEFAULT_CLUB_DATA));
+            }
+
+            // ランクの整合性を確認（RANKSに存在するがclubDataにない場合は初期化）
+            RANKS.forEach(r => {
+                if (!clubData[r]) clubData[r] = [];
+            });
+
+            try {
+                const storedAttendance = localStorage.getItem('table_tennis_attendance_records');
+                if (storedAttendance) {
+                    attendanceState = JSON.parse(storedAttendance);
+                }
+            } catch (e) {
+                attendanceState = {};
+            }
+        }
+
+        function saveDataToStorage() {
+            try {
+                localStorage.setItem('tt_ranks_v3', JSON.stringify(RANKS));
+                localStorage.setItem('tt_members_v3', JSON.stringify(clubData));
+                localStorage.setItem('table_tennis_attendance_records', JSON.stringify(attendanceState));
+            } catch (e) {
+                console.error("Storage save failed", e);
+            }
+        }
+
+        function loadAttendanceForDate(dateStr) {
+            if (!attendanceState[dateStr]) {
+                attendanceState[dateStr] = {};
+            }
+        }
+
+        function toggleAttendance(studentName) {
+            loadAttendanceForDate(currentSelectedDate);
+            const currentStatus = !!attendanceState[currentSelectedDate][studentName];
+            attendanceState[currentSelectedDate][studentName] = !currentStatus;
+
+            saveDataToStorage();
+            renderMainUI();
+        }
+
+        // Render Main Grid & Counters
+        function renderMainUI() {
+            loadAttendanceForDate(currentSelectedDate);
+            const todayAttendance = attendanceState[currentSelectedDate] || {};
+
+            let totalPresentCount = 0;
+            let totalMembersCount = 0;
+
+            const rankCountersEl = document.getElementById('rank-counters');
+            rankCountersEl.innerHTML = '';
+
+            const groupsContainerEl = document.getElementById('groups-container');
+            groupsContainerEl.innerHTML = '';
+
+            RANKS.forEach((rank, idx) => {
+                const members = clubData[rank] || [];
+                totalMembersCount += members.length;
+
+                let rankPresentCount = 0;
+                members.forEach(name => {
+                    if (todayAttendance[name]) {
+                        rankPresentCount++;
+                        totalPresentCount++;
+                    }
+                });
+
+                const theme = getRankTheme(idx);
+                const counterPill = document.createElement('div');
+                counterPill.className = `bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl flex items-center space-x-1.5 shrink-0`;
+                counterPill.innerHTML = `
+                    <span class="text-xs font-bold ${theme.text}">${rank}</span>
+                    <span class="text-xs font-bold text-slate-700"><span class="text-emerald-600 font-black">${rankPresentCount}</span>/${members.length}</span>
+                `;
+                rankCountersEl.appendChild(counterPill);
+
+                // Group Card
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden flex flex-col`;
+                
+                const cardHeader = document.createElement('div');
+                cardHeader.className = `px-5 py-3.5 border-b border-slate-100 flex items-center justify-between ${theme.bg}`;
+                cardHeader.innerHTML = `
+                    <div class="flex items-center space-x-2.5">
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-black shadow-sm ${theme.badge}">${rank}ランク</span>
+                        <h3 class="font-bold text-slate-800 text-sm">グループ</h3>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-500 bg-white/80 px-2.5 py-1 rounded-lg border border-slate-200/60">
+                        出席: <strong class="text-emerald-600">${rankPresentCount}</strong> / ${members.length}名
+                    </span>
+                `;
+                card.appendChild(cardHeader);
+
+                const cardBody = document.createElement('div');
+                cardBody.className = 'p-4 grid grid-cols-2 sm:grid-cols-3 gap-2.5';
+
+                if (members.length === 0) {
+                    cardBody.innerHTML = `<div class="col-span-full py-6 text-center text-xs text-slate-400">部員がいません</div>`;
+                } else {
+                    members.forEach(name => {
+                        const isPresent = !!todayAttendance[name];
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        
+                        if (isPresent) {
+                            btn.className = `group relative p-3 rounded-xl border border-emerald-500 bg-emerald-500 text-white font-bold text-sm shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex flex-col items-center justify-center text-center h-16`;
+                            btn.innerHTML = `
+                                <span class="truncate w-full">${name}</span>
+                                <span class="absolute top-1.5 right-2 text-[10px] bg-white/20 text-white px-1.5 py-0.2 rounded-full font-semibold">出席</span>
+                            `;
+                        } else {
+                            btn.className = `group relative p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium text-sm active:scale-95 transition-all flex flex-col items-center justify-center text-center h-16`;
+                            btn.innerHTML = `
+                                <span class="truncate w-full">${name}</span>
+                            `;
+                        }
+
+                        btn.onclick = () => toggleAttendance(name);
+                        cardBody.appendChild(btn);
+                    });
+                }
+
+                card.appendChild(cardBody);
+                groupsContainerEl.appendChild(card);
+            });
+
+            document.getElementById('total-present').textContent = totalPresentCount;
+            document.getElementById('total-members').textContent = totalMembersCount;
+        }
+
+        function saveTodayAttendance() {
+            saveDataToStorage();
+            showToast(`${currentSelectedDate} の出席を保存しました！`, 'success');
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const messageEl = document.getElementById('toast-message');
+            const iconEl = document.getElementById('toast-icon');
+
+            messageEl.textContent = message;
+            iconEl.className = type === 'success' 
+                ? 'fas fa-check-circle text-emerald-400 text-lg' 
+                : 'fas fa-exclamation-circle text-rose-400 text-lg';
+
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3000);
+        }
+
+        // --- 1. Member & Rank Management Logic ---
+        function openManageModal() {
+            renderManageMemberTable();
+            renderRankManagementUI();
+            updateNewMemberRankSelect();
+            const modal = document.getElementById('manage-modal');
+            const box = document.getElementById('manage-modal-box');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                box.classList.remove('scale-95');
+                box.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeManageModal() {
+            const modal = document.getElementById('manage-modal');
+            const box = document.getElementById('manage-modal-box');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                renderMainUI();
+            }, 200);
+        }
+
+        // Render Rank Management Section inside Modal
+        function renderRankManagementUI() {
+            const container = document.getElementById('rank-pills-container');
+            container.innerHTML = '';
+
+            RANKS.forEach(rank => {
+                const count = (clubData[rank] || []).length;
+                const pill = document.createElement('div');
+                pill.className = 'bg-white border border-indigo-200 px-3 py-1.5 rounded-xl flex items-center space-x-2 text-xs font-bold text-slate-700 shadow-2xs';
+                
+                let deleteBtnHtml = '';
+                // ランク削除ボタン（部員が0人、または確認付き）
+                deleteBtnHtml = `<button onclick="deleteRank('${rank}')" class="text-slate-400 hover:text-rose-600 transition ml-1" title="ランク削除"><i class="fas fa-trash-alt"></i></button>`;
+
+                pill.innerHTML = `
+                    <span>${rank}ランク (${count}名)</span>
+                    ${deleteBtnHtml}
+                `;
+                container.appendChild(pill);
+            });
+        }
+
+        function addNewRank() {
+            const input = document.getElementById('new-rank-name');
+            const rankName = input.value.trim();
+
+            if (!rankName) {
+                showToast('ランク名を入力してください', 'error');
+                return;
+            }
+
+            if (RANKS.includes(rankName)) {
+                showToast('すでに存在するランク名です', 'error');
+                return;
+            }
+
+            RANKS.push(rankName);
+            if (!clubData[rankName]) clubData[rankName] = [];
+            input.value = '';
+
+            saveDataToStorage();
+            renderRankManagementUI();
+            renderManageMemberTable();
+            updateNewMemberRankSelect();
+            showToast(`ランク「${rankName}」を追加しました`);
+        }
+
+        function deleteRank(rankName) {
+            if (RANKS.length <= 1) {
+                showToast('最低1つのランクが必要です', 'error');
+                return;
+            }
+
+            const membersInRank = clubData[rankName] || [];
+            if (membersInRank.length > 0) {
+                // 所属部員がいる場合の処理：他のランクへ移動させるか確認
+                let otherRanks = RANKS.filter(r => r !== rankName);
+                let targetRank = prompt(`「${rankName}」には ${membersInRank.length} 名の部員が所属しています。\n別のどのランクに部員を移動させますか？\n(移動先ランク名を入力: ${otherRanks.join(', ')})`, otherRanks[0]);
+                
+                if (!targetRank || !otherRanks.includes(targetRank)) {
+                    showToast('有効な移動先ランクが指定されなかったため削除をキャンセルしました', 'error');
+                    return;
+                }
+
+                // 部員を移動
+                clubData[targetRank] = (clubData[targetRank] || []).concat(membersInRank);
+            }
+
+            // ランク削除
+            delete clubData[rankName];
+            RANKS = RANKS.filter(r => r !== rankName);
+
+            saveDataToStorage();
+            renderRankManagementUI();
+            renderManageMemberTable();
+            updateNewMemberRankSelect();
+            showToast(`ランク「${rankName}」を削除しました`);
+        }
+
+        function updateNewMemberRankSelect() {
+            const select = document.getElementById('new-member-rank');
+            select.innerHTML = RANKS.map(r => `<option value="${r}">${r} ランク</option>`).join('');
+        }
+
+        function renderManageMemberTable() {
+            const tbody = document.getElementById('manage-members-tbody');
+            tbody.innerHTML = '';
+
+            let count = 0;
+            RANKS.forEach(rank => {
+                (clubData[rank] || []).forEach(name => {
+                    count++;
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-50 transition';
+
+                    let optionsHtml = RANKS.map(r => `<option value="${r}" ${r === rank ? 'selected' : ''}>${r} ランク</option>`).join('');
+
+                    tr.innerHTML = `
+                        <td class="py-2.5 px-4 font-bold text-slate-800">${name}</td>
+                        <td class="py-2.5 px-4">
+                            <select onchange="moveMemberRank('${name}', '${rank}', this.value)" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                ${optionsHtml}
+                            </select>
+                        </td>
+                        <td class="py-2.5 px-4 text-center">
+                            <button onclick="removeMember('${name}', '${rank}')" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg transition" title="部員を削除">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+
+            document.getElementById('manage-total-count').textContent = count;
+        }
+
+        function moveMemberRank(name, currentRank, targetRank) {
+            if (currentRank === targetRank) return;
+            
+            clubData[currentRank] = clubData[currentRank].filter(m => m !== name);
+            if (!clubData[targetRank]) clubData[targetRank] = [];
+            clubData[targetRank].push(name);
+
+            saveDataToStorage();
+            renderManageMemberTable();
+            showToast(`「${name}」を ${targetRank}ランクへ移動しました`);
+        }
+
+        function addNewMember() {
+            const nameInput = document.getElementById('new-member-name');
+            const rankSelect = document.getElementById('new-member-rank');
+            const name = nameInput.value.trim();
+            const rank = rankSelect.value;
+
+            if (!name) {
+                showToast('氏名を入力してください', 'error');
+                return;
+            }
+
+            let duplicate = false;
+            RANKS.forEach(r => {
+                if ((clubData[r] || []).includes(name)) duplicate = true;
+            });
+
+            if (duplicate) {
+                showToast('同姓同名の部員が既に存在します', 'error');
+                return;
+            }
+
+            if (!clubData[rank]) clubData[rank] = [];
+            clubData[rank].push(name);
+            nameInput.value = '';
+
+            saveDataToStorage();
+            renderManageMemberTable();
+            showToast(`「${name}」を追加しました`);
+        }
+
+        function removeMember(name, rank) {
+            if (confirm(`「${name}」さんを削除してもよろしいですか？`)) {
+                clubData[rank] = clubData[rank].filter(m => m !== name);
+                saveDataToStorage();
+                renderManageMemberTable();
+                showToast(`「${name}」を削除しました`);
+            }
+        }
+
+        function resetMembersToDefault() {
+            if (confirm('部員リストとランク設定を初期状態にリセットしますか？')) {
+                clubData = JSON.parse(JSON.stringify(DEFAULT_CLUB_DATA));
+                RANKS = [...DEFAULT_RANKS];
+                saveDataToStorage();
+                renderManageMemberTable();
+                renderRankManagementUI();
+                updateNewMemberRankSelect();
+                showToast('初期データにリセットしました');
+            }
+        }
+
+        // --- 2. History Modal Logic ---
+        function openHistoryModal() {
+            renderMatrixTable();
+            const modal = document.getElementById('history-modal');
+            const box = document.getElementById('history-modal-box');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                box.classList.remove('scale-95');
+                box.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeHistoryModal() {
+            const modal = document.getElementById('history-modal');
+            const box = document.getElementById('history-modal-box');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        function renderMatrixTable() {
+            const container = document.getElementById('matrix-container');
+            
+            let dates = Object.keys(attendanceState).sort();
+            if (dates.length === 0) {
+                dates = [currentSelectedDate];
+            }
+
+            let allStudents = [];
+            RANKS.forEach(rank => {
+                (clubData[rank] || []).forEach(name => {
+                    allStudents.push({ name, rank });
+                });
+            });
+
+            let html = `
+                <div class="overflow-x-auto border border-slate-200 rounded-xl shadow-sm">
+                    <table class="w-full text-left border-collapse bg-white text-sm">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 text-xs uppercase font-bold border-b border-slate-200">
+                                <th class="py-3.5 px-4 sticky left-0 bg-slate-100 z-10 border-r border-slate-200 min-w-[140px]">生徒名</th>
+                                <th class="py-3.5 px-3 border-r border-slate-200 text-center min-w-[70px]">ランク</th>
+            `;
+
+            dates.forEach(date => {
+                html += `<th class="py-3.5 px-3 text-center border-r border-slate-200 min-w-[100px] whitespace-nowrap">${date}</th>`;
+            });
+
+            html += `</tr></thead><tbody class="divide-y divide-slate-100 text-xs">`;
+
+            allStudents.forEach((student, index) => {
+                const rowBg = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+                html += `
+                    <tr class="${rowBg} hover:bg-slate-100/80 transition">
+                        <td class="py-3 px-4 font-bold text-slate-800 sticky left-0 ${rowBg} border-r border-slate-200 shadow-sm">${student.name}</td>
+                        <td class="py-3 px-3 text-center border-r border-slate-200"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700">${student.rank}</span></td>
+                `;
+
+                dates.forEach(date => {
+                    const isPresent = attendanceState[date] && attendanceState[date][student.name];
+                    const statusClass = isPresent 
+                        ? 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-300' 
+                        : 'text-slate-300 hover:bg-slate-200';
+                    const icon = isPresent ? '<i class="fas fa-check text-emerald-600"></i> 出席' : '—';
+
+                    html += `
+                        <td class="py-2 px-2 text-center border-r border-slate-100 cursor-pointer select-none" onclick="toggleMatrixCell('${date}', '${student.name}')">
+                            <div class="w-full py-1.5 rounded-lg transition ${statusClass}">
+                                ${icon}
+                            </div>
+                        </td>
+                    `;
+                });
+
+                html += `</tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
+        }
+
+        function toggleMatrixCell(dateStr, studentName) {
+            if (!attendanceState[dateStr]) {
+                attendanceState[dateStr] = {};
+            }
+            const current = !!attendanceState[dateStr][studentName];
+            attendanceState[dateStr][studentName] = !current;
+            saveDataToStorage();
+            renderMatrixTable();
+            renderMainUI();
+        }
+
+        function exportCSV() {
+            let dates = Object.keys(attendanceState).sort();
+            if (dates.length === 0) {
+                showToast('出力するデータがありません', 'error');
+                return;
+            }
+
+            let csvContent = "\uFEFF" + "生徒名,ランク," + dates.join(",") + "\n";
+
+            RANKS.forEach(rank => {
+                (clubData[rank] || []).forEach(name => {
+                    let row = [`"${name}"`, `"${rank}"`];
+                    dates.forEach(date => {
+                        const isPresent = attendanceState[date] && attendanceState[date][name];
+                        row.push(isPresent ? "1" : "0");
+                    });
+                    csvContent += row.join(",") + "\n";
+                });
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `卓球部_出席記録_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('CSVをダウンロードしました');
+        }
+
+        function clearAllHistoryConfirm() {
+            if (confirm('すべての過去出席記録を初期化しますか？')) {
+                attendanceState = {};
+                saveDataToStorage();
+                renderMatrixTable();
+                renderMainUI();
+                showToast('履歴データを初期化しました');
+            }
+        }
+    </script>
+</body>
+</html>
